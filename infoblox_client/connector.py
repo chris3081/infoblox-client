@@ -24,7 +24,7 @@ try:
 except ImportError:
     import urllib.parse as urlparse
 
-from oslo_log import log as logging
+import logging
 from oslo_serialization import jsonutils
 
 from infoblox_client import exceptions as ib_ex
