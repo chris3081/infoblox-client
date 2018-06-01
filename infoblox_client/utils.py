@@ -16,7 +16,7 @@
 import netaddr
 import six
 
-from oslo_log import log as logging
+import logging
 from oslo_serialization import jsonutils
 
 
