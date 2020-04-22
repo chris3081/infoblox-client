@@ -63,7 +63,8 @@ class Connector(object):
                        'wapi_version': '2.1',
                        'max_results': None,
                        'log_api_calls_as_info': False,
-                       'paging': False}
+                       'paging': False,
+                       'trust_env': True}
 
     def __init__(self, options):
         self._parse_options(options)
@@ -84,7 +85,7 @@ class Connector(object):
                       'ssl_verify', 'http_request_timeout', 'max_retries',
                       'http_pool_connections', 'http_pool_maxsize',
                       'silent_ssl_warnings', 'log_api_calls_as_info',
-                      'max_results', 'paging')
+                      'max_results', 'paging', 'trust_env')
         for attr in attributes:
             if isinstance(options, dict) and attr in options:
                 setattr(self, attr, options[attr])
@@ -108,6 +109,7 @@ class Connector(object):
 
     def _configure_session(self):
         self.session = requests.Session()
+        self.session.trust_env = self.trust_env
         adapter = requests.adapters.HTTPAdapter(
             pool_connections=self.http_pool_connections,
             pool_maxsize=self.http_pool_maxsize,
