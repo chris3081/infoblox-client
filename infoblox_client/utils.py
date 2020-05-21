@@ -17,8 +17,11 @@ import netaddr
 import six
 
 import logging
-from oslo_serialization import jsonutils
 
+try:
+    from oslo_serialization import jsonutils
+except ImportError:  # pragma: no cover
+    import json as jsonutils
 
 LOG = logging.getLogger(__name__)
 
@@ -72,7 +75,7 @@ def safe_json_load(data):
     try:
         return jsonutils.loads(data)
     except ValueError:
-        LOG.warn("Could not decode reply into json: %s", data)
+        LOG.warning("Could not decode reply into json: %s", data)
 
 
 def try_value_to_bool(value, strict_mode=True):

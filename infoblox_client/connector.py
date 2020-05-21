@@ -15,10 +15,12 @@
 
 import functools
 import re
-import requests
-from requests import exceptions as req_exc
-import six
 import urllib
+import requests
+import six
+import urllib3
+from requests import exceptions as req_exc
+
 try:
     import urlparse
 except ImportError:
@@ -43,6 +45,7 @@ def reraise_neutron_exception(func):
             raise ib_ex.InfobloxTimeoutError(e)
         except req_exc.RequestException as e:
             raise ib_ex.InfobloxConnectionError(reason=e)
+
     return callee
 
 
@@ -105,7 +108,8 @@ class Connector(object):
 
         self.wapi_url = "https://%s/wapi/v%s/" % (self.host,
                                                   self.wapi_version)
-        self.cloud_api_enabled = self.is_cloud_wapi(self.wapi_version)
+        self.cloud_api_enabled = self.is_cloud_wapi(
+            self.wapi_version)
 
     def _configure_session(self):
         self.session = requests.Session()
@@ -121,7 +125,7 @@ class Connector(object):
                                                       strict_mode=False)
 
         if self.silent_ssl_warnings:
-            requests.packages.urllib3.disable_warnings()
+            urllib3.disable_warnings()
 
     def _construct_url(self, relative_path, query_params=None,
                        extattrs=None, force_proxy=False):
@@ -179,7 +183,11 @@ class Connector(object):
             query_params = dict()
 
         if return_fields:
-            query_params['_return_fields'] = ','.join(return_fields)
+            if 'default' in return_fields:
+                return_fields.remove('default')
+                query_params['_return_fields+'] = ','.join(return_fields)
+            else:
+                query_params['_return_fields'] = ','.join(return_fields)
 
         if max_results:
             query_params['_max_results'] = max_results
@@ -192,7 +200,8 @@ class Connector(object):
 
     def _get_request_options(self, data=None):
         opts = dict(timeout=self.http_request_timeout,
-                    headers=self.DEFAULT_HEADER)
+                    headers=self.DEFAULT_HEADER,
+                    verify=self.session.verify)
         if data:
             opts['data'] = jsonutils.dumps(data)
         return opts
@@ -316,6 +325,10 @@ class Connector(object):
     def _get_object(self, obj_type, url):
         opts = self._get_request_options()
         self._log_request('get', url, opts)
+        if self.session.cookies:
+            # the first 'get' or 'post' action will generate a cookie
+            # after that, we don't need to re-authenticate
+            self.session.auth = None
         r = self.session.get(url, **opts)
 
         self._validate_authorized(r)
@@ -347,6 +360,10 @@ class Connector(object):
         url = self._construct_url(obj_type, query_params)
         opts = self._get_request_options(data=payload)
         self._log_request('post', url, opts)
+        if self.session.cookies:
+            # the first 'get' or 'post' action will generate a cookie
+            # after that, we don't need to re-authenticate
+            self.session.auth = None
         r = self.session.post(url, **opts)
 
         self._validate_authorized(r)
@@ -467,12 +484,23 @@ class Connector(object):
 
     @staticmethod
     def is_cloud_wapi(wapi_version):
+        """Validate that a WAPI semantic version is valid.
+
+        Args:
+            wapi_version (str): WAPI semantic version
+
+        Returns:
+            True if the major version is higher than a given threshold,
+            False otherwise.
+
+        Raises:
+            ValueError if an invalid version is passed
+        """
         valid = wapi_version and isinstance(wapi_version, six.string_types)
         if not valid:
             raise ValueError("Invalid argument was passed")
-        version_match = re.search('(\d+)\.(\d+)', wapi_version)
+        version_match = re.search(r'(\d+)\.(\d+)', wapi_version)
         if version_match:
-            if int(version_match.group(1)) >= \
-                    CLOUD_WAPI_MAJOR_VERSION:
+            if int(version_match.group(1)) >= CLOUD_WAPI_MAJOR_VERSION:
                 return True
         return False
